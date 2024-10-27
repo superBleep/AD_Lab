@@ -266,8 +266,8 @@ def ex4():
     # Thresholds for both strategies, on both train / test data
     avg_train_thresh = np.quantile(avg_train_scores, cont_rate)
     avg_test_thresh = np.quantile(avg_test_scores, cont_rate)
-    max_train_thresh = np.quantile(avg_test_scores, cont_rate)
-    max_test_thresh = np.quantile(max_train_scores, cont_rate)
+    max_train_thresh = np.quantile(max_train_scores, cont_rate)
+    max_test_thresh = np.quantile(max_test_scores, cont_rate)
 
     print("--- Balanced accuracies (AVG STRATEGY) ---")
     i = 0
