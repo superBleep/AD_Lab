@@ -7,11 +7,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as ptch
 from pyod.utils.data import generate_data_clusters
+from pyod.utils.utility import standardizer
 from pyod.models import knn, lof
+from pyod.models.combination import average, maximization
 from sklearn.metrics import confusion_matrix
 from sklearn.datasets import make_blobs
+from sklearn.model_selection import train_test_split
+from scipy.io import loadmat
 
 
+# Compute leverage scores for X data points
 def leverage_scores(X):
     n = np.shape(X)[0]
     U, _, _ = np.linalg.svd(X)
@@ -20,6 +25,7 @@ def leverage_scores(X):
     return U[idx]
 
 
+# Generate data points (linear model)
 def generate_data_2d(x_var, eps_mean, eps_var):
     n = 100
     a, b = 2, 8
@@ -31,6 +37,7 @@ def generate_data_2d(x_var, eps_mean, eps_var):
     return np.array((x, y)).T
 
 
+# Generate data points (2D model)
 def generate_data_3d(x1_var, x2_var, eps_mean, eps_var):
     n = 100
     a, b, c = 2, 8, 5
@@ -43,6 +50,7 @@ def generate_data_3d(x1_var, x2_var, eps_mean, eps_var):
     return np.array((x1, x2, y)).T
 
 
+# Plot 2D / 3D data and mark the outliers
 def plot_data(X, axs, pos, title, type):
     scores = leverage_scores(X)
     max_scores = 5 # Highest k leverage scores
@@ -59,9 +67,8 @@ def plot_data(X, axs, pos, title, type):
     axs[pos].title.set_text(title)
 
 
+ # Exercise 1
 def ex1():
-    # Exercise 1
-
     # Linear model
     _, axs1 = plt.subplots(2, 2, figsize=(10, 8))
 
@@ -86,30 +93,41 @@ def ex1():
     # 2D model
     _, axs2 = plt.subplots(2, 2, figsize=(10, 8), subplot_kw=dict(projection="3d"))
 
+    # Regular data points
     X = generate_data_3d(1, 1, 0, 1)
     plot_data(X, axs2, (0, 0), r"Regular ($\sigma^2_{x_1} = 1$, $\sigma^2_{x_2} = 1$, $\sigma^2_\epsilon = 1$)", "3d")
 
+    # High variance on x1 and x2
     X = generate_data_3d(5, 5, 0, 1)
     plot_data(X, axs2, (0, 1), r"High x1, x2 variance ($\sigma^2_{x_1} = 5$, $\sigma^2_{x_2} = 5$, $\sigma^2_\epsilon = 1$)", "3d")
 
+    # High variance on y
     X = generate_data_3d(1, 1, 0, 5)
     plot_data(X, axs2, (1, 0), r"High y variance ($\sigma^2_{x_1} = 1$, $\sigma^2_{x_2} = 1$, $\sigma^2_\epsilon = 5$)", "3d")
 
+    # High variance on x1, x2 and y
     X = generate_data_3d(5, 5, 0, 5)
     plot_data(X, axs2, (1, 1), r"High x1,x2,y variance ($\sigma^2_{x_1} = 5$, $\sigma^2_{x_2} = 5$, $\sigma^2_\epsilon = 5$)", "3d")
 
     plt.show()
 
 
+# Compute the balanced accuracy metric for a prediciton
+def balanced_acc(Y_true, Y_pred):
+    tn, fp, fn, tp = confusion_matrix(Y_true, Y_pred).ravel()
+    tpr = tp / (tp + fn)
+    tnr = tn / (tn + fp)
+
+    return (tpr + tnr) / 2
+
+
+# Make predictions using kNN and plot them
 def predict_and_plot_ex2(X_train, X_test, Y_train, Y_test, n_neighbors):
     classifier = knn.KNN(n_neighbors=n_neighbors)
     classifier.fit(X_train)
     Y_train_pred, Y_test_pred = classifier.predict(X_train), classifier.predict(X_test)
 
-    tn, fp, fn, tp = confusion_matrix(Y_test, Y_test_pred).ravel()
-    tpr = tp / (tp + fn)
-    tnr = tn / (tn + fp)
-    ba = (tpr + tnr) / 2
+    ba = balanced_acc(Y_test, Y_test_pred)
 
     _, axs = plt.subplots(2, 2, figsize=(10, 8))
     
@@ -140,6 +158,7 @@ def predict_and_plot_ex2(X_train, X_test, Y_train, Y_test, n_neighbors):
     plt.suptitle(f"kNN outlier detection (k={n_neighbors}, ba={ba})")
 
 
+# Exercise 2
 def ex2():
     n_train = 400
     n_test = 200
@@ -156,6 +175,7 @@ def ex2():
     plt.show()
 
 
+# Make predictions using kNN and LOF and plot them
 def predict_and_plot_ex3(X, Y, cont_rate, k_knn, k_lof):
     classifier = knn.KNN(cont_rate)
     classifier.fit(X)
@@ -184,6 +204,7 @@ def predict_and_plot_ex3(X, Y, cont_rate, k_knn, k_lof):
     plt.legend(handles=custom_legend)
 
 
+# Exercise 3
 def ex3():
     n_samples = [200, 100]
     centers = [[-10, 10], [10, 10]]
@@ -198,8 +219,79 @@ def ex3():
     plt.show()
     
 
+# Exercise 4
 def ex4():
-    pass
+    data = loadmat("./cardio.mat")
+    X, Y = data["X"], data["y"]
+    cont_rate = 0.1
+
+    # Normalize data
+    mean = np.mean(X)
+    var = np.var(Y)
+    X = (X - mean) / var
+
+    # Split data into train / test
+    test_size = 500
+    train_size = np.shape(X)[0] - test_size
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, train_size=train_size)
+
+    print("--- Balanced accuracies (NO STRATEGY) ---")
+    train_scores, test_scores = [], []
+    for k in np.linspace(30, 120, 10):
+        k = int(k)
+        classifier = lof.LOF(k, contamination=cont_rate) # Use LOF classifier
+        classifier.fit(X_train)
+
+        Y_train_pred = classifier.predict(X_train) 
+        Y_test_pred = classifier.predict(X_test)
+
+        train_scores.append(classifier.decision_function(X_train))
+        test_scores.append(classifier.decision_function(X_test))
+
+        print(f"Train data, k={k}: {balanced_acc(Y_train, Y_train_pred)}")
+        print(f"Test data, k={k}: {balanced_acc(Y_test, Y_test_pred)}")
+
+    # Normalize train / test scores
+    normalized_train_scores = standardizer(train_scores)
+    normalized_test_scores = standardizer(test_scores)
+
+    # Final train / test scores (average strategy)
+    avg_train_scores = average(normalized_train_scores)
+    avg_test_scores = average(normalized_train_scores)
+
+    # Final train / test scores (maximization strategy)
+    max_train_scores = maximization(normalized_train_scores)
+    max_test_scores = maximization(normalized_test_scores)
+
+    # Thresholds for both strategies, on both train / test data
+    avg_train_thresh = np.quantile(avg_train_scores, cont_rate)
+    avg_test_thresh = np.quantile(avg_test_scores, cont_rate)
+    max_train_thresh = np.quantile(avg_test_scores, cont_rate)
+    max_test_thresh = np.quantile(max_train_scores, cont_rate)
+
+    print("--- Balanced accuracies (AVG STRATEGY) ---")
+    i = 0
+    for k in np.linspace(30, 120, 10):
+        k = int(k)
+        Y_train_pred = np.array([1. if z >= avg_train_thresh else 0. for z in normalized_train_scores[i]])
+        Y_test_pred= np.array([1. if z >= avg_test_thresh else 0. for z in normalized_test_scores[i]])
+
+        print(f"Train data, k={k}: {balanced_acc(Y_train, Y_train_pred)}")
+        print(f"Test data, k={k}: {balanced_acc(Y_test, Y_test_pred)}")
+
+        i += 1
+
+    print("--- Balanced accuracies (MAX STRATEGY) ---")
+    i = 0
+    for k in np.linspace(30, 120, 10):
+        k = int(k)
+        Y_train_pred = np.array([1. if z >= max_train_thresh else 0. for z in normalized_train_scores[i]])
+        Y_test_pred= np.array([1. if z >= max_test_thresh else 0. for z in normalized_test_scores[i]])
+
+        print(f"Train data, k={k}: {balanced_acc(Y_train, Y_train_pred)}")
+        print(f"Test data, k={k}: {balanced_acc(Y_test, Y_test_pred)}")
+
+        i += 1
 
 
 if __name__ == '__main__':
