@@ -14,6 +14,30 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, roc_auc_score
 
 
+# Exercise 1
+def ex1():
+    size = 500
+    X, _ = make_blobs(size)
+
+    vectors = np.random.multivariate_normal([0, 0], np.identity(2), 5)
+    projections = []
+    for v in vectors:
+        values = []
+
+        for x in X:
+            values.append(np.dot(x, v))
+
+        projections.append(values)
+
+    bins = 5
+    buffer = 5
+    probabilities = []
+    for p in projections:
+        hist, _ = np.histogram(p, bins, (np.min(p) - buffer, np.max(p) + buffer))
+
+        probabilities.append(hist / size)
+
+
 def predict(classifier, X, X_test):
     classifier.fit(X)
 
@@ -90,6 +114,24 @@ def compute_stats(Y_true, Y_pred, Y_scores):
     return ba, auc
 
 
+def split_data(X, Y):
+    test_size = int(0.4 * np.shape(X)[0])
+    train_size = np.shape(X)[0] - test_size
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, train_size=train_size)
+
+    return X_train, X_test, Y_train, Y_test
+
+
+def predict_compute(classifier, X_train, X_test, Y_test):
+    classifier.fit(X_train)
+    Y_pred = classifier.predict(X_test)
+    Y_scores = classifier.decision_function(X_test)
+
+    ba, auc = compute_stats(Y_test, Y_pred, Y_scores)
+
+    return ba, auc
+
+
 # Exercise 3
 def ex3():
     data = loadmat("./shuttle.mat")
@@ -99,39 +141,41 @@ def ex3():
     var = np.var(Y)
     X = (X - mean) / var
 
-    test_size = int(0.4 * np.shape(X)[0])
-    train_size = np.shape(X)[0] - test_size
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, train_size=train_size)
+    X_train, X_test, _, Y_test = split_data(X, Y)
 
+    ba, auc = predict_compute(IForest(), X_train, X_test, Y_test)
+    print(f"IForest - BA: {ba}, AUC: {auc}")
+
+    ba, auc = predict_compute(LODA(), X_train, X_test, Y_test)
+    print(f"LODA - BA: {ba}, AUC: {auc}")
+
+    ba, auc = predict_compute(DIF(), X_train, X_test, Y_test)
+    print(f"DIF - BA: {ba}, AUC: {auc}")
+
+    mean_ba_iforest, mean_ba_loda, mean_ba_dif = 0, 0, 0
+    mean_auc_iforest, mean_auc_loda, mean_auc_dif = 0, 0, 0
     for i in range(10):
-        print(f"--- Split {i} ---")
+        X_train, X_test, _, Y_test = split_data(X, Y)
 
-        classifier = IForest()
-        classifier.fit(X_train)
-        Y_pred = classifier.predict(X_test)
-        Y_scores = classifier.decision_function(X_test)
+        ba, auc = predict_compute(IForest(), X_train, X_test, Y_test)
+        mean_ba_iforest += ba
+        mean_auc_iforest += auc
 
-        ba, auc = compute_stats(Y_test, Y_pred, Y_scores)
-        print(f"IForest - BA: {ba}, AUC: {auc}")
+        ba, auc = predict_compute(LODA(), X_train, X_test, Y_test)
+        mean_ba_loda += ba
+        mean_auc_loda += auc
 
-        classifier = LODA()
-        classifier.fit(X_train)
-        Y_pred = classifier.predict(X_test)
-        Y_scores = classifier.decision_function(X_test)
+        ba, auc = predict_compute(DIF(), X_train, X_test, Y_test)
+        mean_ba_dif += ba
+        mean_auc_dif += auc
 
-        ba, auc = compute_stats(Y_test, Y_pred, Y_scores)
-        print(f"LODA - BA: {ba}, AUC: {auc}")
-
-        classifier = DIF()
-        classifier.fit(X_train)
-        Y_pred = classifier.predict(X_test)
-        Y_scores = classifier.decision_function(X_test)
-
-        ba, auc = compute_stats(Y_test, Y_pred, Y_scores)
-        print(f"DIF - BA: {ba}, AUC: {auc}")
+    print(f"IForest - Mean BA: {mean_ba_iforest / 10}, Mean AUC: {mean_auc_iforest / 10}")
+    print(f"LODA - Mean BA: {mean_ba_loda / 10}, Mean AUC: {mean_auc_loda / 10}")
+    print(f"DIF - Mean BA: {mean_ba_dif / 10}, Mean AUC: {mean_auc_dif}")
 
 
 if __name__ == "__main__":
-    ex2_2d()
-    ex2_3d()
-    ex3()
+    ex1()
+    #ex2_2d()
+    #ex2_3d()
+    #ex3()
