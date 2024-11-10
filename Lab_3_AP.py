@@ -17,10 +17,10 @@ from sklearn.metrics import confusion_matrix, roc_auc_score
 # Exercise 1
 def ex1():
     size = 500
-    X, _ = make_blobs(size)
+    X, _ = make_blobs(size, centers=1)
 
     vectors = np.random.multivariate_normal([0, 0], np.identity(2), 5)
-    projections = []
+    projections = [] # Projections of points X for each vector
     for v in vectors:
         values = []
 
@@ -31,11 +31,34 @@ def ex1():
 
     bins = 5
     buffer = 5
-    probabilities = []
+    probs_per_vector, edges_per_vector = [], []
     for p in projections:
-        hist, _ = np.histogram(p, bins, (np.min(p) - buffer, np.max(p) + buffer))
+        hist, bin_edges = np.histogram(p, bins, (np.min(p) - buffer, np.max(p) + buffer))
 
-        probabilities.append(hist / size)
+        probs_per_vector.append(hist / size)
+        edges_per_vector.append(bin_edges)
+
+    scores = []
+    for i, x in enumerate(X):
+        mean = 0
+
+        for j in range(5):
+            p = projections[j][i] # Projection of point i on vector j
+            edges = edges_per_vector[j] # Histogram edges for vector j
+
+            for k in range(len(edges) - 1):
+                if p >= edges[k] and p < edges[k + 1]:
+                    # Probability of bin k associated with the projection of point i
+                    mean += probs_per_vector[j][k]
+
+        scores.append(mean / 5) # Mean of probabilities for each histogram
+
+    test_size = 500
+    X_test = np.random.uniform(-3, 3, [test_size, 2])
+
+    plt.figure(1)
+    plt.scatter(X_test[:, 0], X_test[:, 1], c=scores, cmap='viridis', s=10)
+    plt.show()
 
 
 def predict(classifier, X, X_test):
@@ -176,6 +199,6 @@ def ex3():
 
 if __name__ == "__main__":
     ex1()
-    #ex2_2d()
-    #ex2_3d()
-    #ex3()
+    ex2_2d()
+    ex2_3d()
+    ex3()
