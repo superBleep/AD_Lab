@@ -12,9 +12,12 @@ from pyod.models.deep_svdd import DeepSVDD
 from sklearn.metrics import confusion_matrix, roc_auc_score, balanced_accuracy_score
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.svm import OneClassSVM
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 from scipy.io import loadmat
 
 
+# Compute BA and ROC AUC metrics
 def compute_ba_auc(Y_true, Y_pred, Y_scores):
     tn, fp, fn, tp = confusion_matrix(Y_true, Y_pred).ravel()
     tpr = tp / (tp + fn)
@@ -26,23 +29,18 @@ def compute_ba_auc(Y_true, Y_pred, Y_scores):
     return ba, auc
 
 
-def compute_ba(Y_true, Y_pred):
-    tn, fp, fn, tp = confusion_matrix(Y_true, Y_pred).ravel()
-    tpr = tp / (tp + fn)
-    tnr = tn / (tn + fp)
-
-    return (tpr + tnr) / 2
-
-
+# Exercise 1
 def ex1():
     X_train, X_test, Y_train, Y_test = generate_data(300, 200, 3, 0.15)
 
+    # Plot a subplot for a specific dataset + anomaly classification
     def plot_data(X, Y, axs, loc, title):
         colors = np.array(["green"] * np.shape(X)[0])
         colors[np.where(Y == 1)] = "red"
         axs[loc].scatter(X[:, 0], X[:, 1], X[:, 2], c=colors, s=7)
         axs[loc].title.set_text(title)
 
+    # Apply a prediciton model and compute the BA and ROC AUC metrics
     def apply_model(model, title):
         classifier = model
         classifier.fit(X_train)
@@ -74,45 +72,62 @@ def ex1():
     plt.show()
 
 
+# Exercise 2
 def ex2():
     data = loadmat("./cardio.mat")
     X, Y = data["X"], data["y"]
 
-    test_size = int(0.4 * np.shape(X)[0])
+    test_size = int(0.4 * np.shape(X)[0]) # 40% of the dataset
     train_size = np.shape(X)[0] - test_size
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, train_size=train_size)
 
+    # Parameter grid
     parameters = {
-        "kernel": ["linear", "poly", "rbf", "sigmoid", "precomputed"],
-        "gamma": [None, "scale" ,"auto", 0.3, None],
-        "nu": [0.2, 0.3, 0.5, 0.6, 0.7],
+        "model__kernel": ["linear", "rbf", "sigmoid"],
+        "model__gamma": ["scale" ,"auto", 0.3],
+        "model__nu": [0.1, 0.2, 0.3, 0.5],
     }
 
-    estimator = OneClassSVM(kernel=parameters["kernel"], gamma=parameters["gamma"], nu=parameters["nu"])
+    # Perform standardization before applying model
+    pipeline = Pipeline([
+        ('standardization', StandardScaler()),
+        ('model', OneClassSVM())
+    ])
 
-    classifier = GridSearchCV(estimator, parameters, scoring=balanced_accuracy_score)
-    classifier.fit(X_train)
-    Y_scores = classifier.decision_function(X_test)
+    # Convert pyod anomaly labels to sklearn labels
+    Y_train = 1 - (Y_train * 2)
+    Y_test = 1 - (Y_test * 2)
 
-    print(Y_scores)
+    # Apply grid search and predict labels
+    classifier = GridSearchCV(pipeline, parameters, scoring="balanced_accuracy")
+    classifier.fit(X_train, Y_train)
 
+    print("Best parameters: ", classifier.best_params_)
+    
+    Y_test_pred = classifier.predict(X_test)
+    print("BA (Test data): ", balanced_accuracy_score(Y_test, Y_test_pred))
+    
 
+# Exercise 3
 def ex3():
     data = loadmat("./shuttle.mat")
     X, Y = data["X"], data["y"]
 
+    # Compute contamination rate (for models)
     outliers = np.size(Y[np.where(Y == 1)])
     total = np.size(Y)
     cont_rate = np.round(outliers / total, 2)
 
+    # Normalize data
     mean = np.mean(X)
     var = np.var(Y)
     X = (X - mean) / var
 
-    test_size = int(0.5 * np.shape(X)[0])
+    test_size = int(0.5 * np.shape(X)[0]) # 50% of the dataset
     train_size = np.shape(X)[0] - test_size
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, train_size=train_size)
 
+    # Apply model and compute BA and ROC AUC metrics
     def compute_metrics(model):
         classifier = model
         classifier.fit(X_train)
@@ -124,9 +139,11 @@ def ex3():
 
     compute_metrics(OCSVM("linear", contamination=cont_rate))
     compute_metrics(DeepSVDD(np.shape(X)[1], contamination=cont_rate))
+    compute_metrics(DeepSVDD(np.shape(X)[1], epochs=50, batch_size=16, contamination=cont_rate, output_activation="relu"))
+    compute_metrics(DeepSVDD(np.shape(X)[1], epochs=75, batch_size=64, contamination=cont_rate, output_activation="selu"))
 
 
 if __name__ == '__main__':
-    #ex1()
-    #ex2()
+    ex1()
+    ex2()
     ex3()
