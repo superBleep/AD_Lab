@@ -1,3 +1,4 @@
 ap_venv
 *.mat
 *.txt
+*.data
