@@ -11,6 +11,11 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from pyod.models import lof
 import warnings
+from scipy.io import loadmat
+from torch_geometric.utils.convert import from_scipy_sparse_matrix
+from torch.nn import Module
+from torch_geometric.nn import GCNConv
+import torch.nn.functional as F
 
 
 # Compute hash of graph edge as the sum each nodes' hash
@@ -311,6 +316,70 @@ def ex2():
     plt.show()
 
 
+# Encoder from Exercise 3
+class Encoder(Module):
+    def __init__(self, in_chan):
+        super.__init__(self)
+
+        self.conv1 = GCNConv(in_chan, 128)
+        self.conv2 = GCNConv(128, 64)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        return F.relu(self.conv2(x))
+    
+
+# Attribute decoder from Exercise 3
+class AttributeDecoder(Module):
+    def __init__(self, out_chan):
+        super.__init__(self)
+
+        self.conv1 = GCNConv(64, 128)
+        self.conv2 = GCNConv(128, out_chan)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        return F.relu(self.conv2(x))
+    
+
+# Structure decoder from Exercise 3
+class StructureDecoder(Module):
+    def __init__(self):
+        super.__init__(self)
+
+        self.conv1 = GCNConv(64, 64)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        return x @ x.T
+
+
+# Graph autoencoder from Exercise 3
+class GAE(Module):
+    def __init__(self, n):
+        super.__init__(self)
+
+        self.encoder = Encoder(n)
+        self.att_decoder = AttributeDecoder(n)
+        self.struc_decoder = StructureDecoder()
+
+    def forward(self, x):
+        x = self.encoder(x)
+        # ???
+
+
+# --- Exercise 3 ---
+def ex3():
+    # --- Step 2 ---
+    data = loadmat('./ACM.mat')
+    att, adj, labels = data['Attributes'], data['Network'], data['Label']
+    edges_idx, edges_att = from_scipy_sparse_matrix(adj)
+
+    autoencoder = GAE()
+    autoencoder.fit()
+
+
 if __name__ == '__main__':
     ex1()
     ex2()
+    ex3()
